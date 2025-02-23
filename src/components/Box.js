@@ -1,12 +1,13 @@
 import { useSpring, animated } from "@react-spring/three"
-import { useFrame } from "@react-three/fiber"
-import { useRef, useState, useEffect, use } from "react"
+import { useFrame, useThree } from "@react-three/fiber"
+import { useRef, useState, useEffect } from "react"
 import * as THREE from "three"
 import vertexImages from "../shaders/vertexImages.glsl"
 import fragmentImages from "../shaders/fragmentImages.glsl"
 import { useMemo } from "react"
 import gsap from 'gsap'
 import { useGSAP } from "@gsap/react"
+import { Billboard } from '@react-three/drei'
 export default function Box(props) {
   const numberOfCubes = 10
   const positions = useRef([...Array(numberOfCubes)].map((_, i) => ({
@@ -15,8 +16,8 @@ export default function Box(props) {
     z: (i * -0.6)
   })))
   const [textures, setTextures] = useState([])
-  const planesRef = useRef([]);
-  const [planes, setPlanes] = useState([]); 
+  const [morphIndex, setMorphIndex] = useState(-1)
+
 
   useEffect(() => {
     const loader = new THREE.TextureLoader();
@@ -27,45 +28,33 @@ export default function Box(props) {
       loader.load(
         `/assets/images/${i}.jpg`,
         (texture) => {
-          loadedTextures.push(texture);
+
+          loadedTextures[i] = texture;
           loadedCount++;
           setTextures((prev) => [...prev, texture]);
         }
       )
     }
-  }, [numberOfCubes]);
+    const handleMorphIndex = (e) => {
+      setMorphIndex((prev) => (prev + 1) % 3);
+    };
+    window.addEventListener('click', handleMorphIndex)
 
-  useFrame(() => {
-    positions.current.forEach((pos, i) => {
-
-    })
-  })
-  useGSAP(() => {
-    console.log(planesRef.current);
-  
-    window.addEventListener('click', () => {
-      gsap.to(positions.current, { x:Math.cos(Math.PI *2 ) * 2, y:0, z:Math.sin( Math.PI *2 ) * 2, duration: 1.5, ease: 'elastic.out(1, 0.6)' })
-
-
-    })
 
     return () => {
-      window.removeEventListener('click', () => {})
+      window.removeEventListener('click', handleMorphIndex)
     }
+  }, [numberOfCubes]);
 
-  }, { dependencies: [planes] })
+
+
   if (textures.length < numberOfCubes) return null;
 
 
   return (
     <>
       {positions.current.map((position, index) => (
-        <AnimatedCube key={index} position={[position.x, position.y, position.z]} index={index} texturesElements={textures} planesRef ={(el) => {
-          if (el && !planesRef.current.includes(el)) {
-            planesRef.current[index] = el;
-            setPlanes([...planesRef.current]); // Force le re-render en mettant à jour l'état
-          }
-        }}/>
+        <AnimatedCube key={index} position={[position.x, position.y, position.z]} index={index} texturesElements={textures} morphingIndex={morphIndex}  />
       ))}
 
     </>
@@ -74,34 +63,79 @@ export default function Box(props) {
 
 
 
-function AnimatedCube({ position, index, texturesElements }) {
+function AnimatedCube({ position, index, texturesElements, morphingIndex }) {
   const meshRef = useRef()
   const [hovered, setHover] = useState(false)
   const [active, setActive] = useState(false)
+  const [canPlayStartAnim, setCanPlayStartAnim] = useState(true)
+  const { camera } = useThree()
+  const radius = 5;
+  const angleStep = (Math.PI * 2) / 10;
+  const angle = angleStep * index;
+  const x = Math.cos(angle) * radius;
+  const z = Math.sin(angle) * radius;
 
   const uniforms = useMemo(() => ({
     uTexture: { value: texturesElements[index] || new THREE.Texture() },
   }), [index, texturesElements])
 
-  useEffect(() => {
-  
-
-
-  }, [meshRef.current])
-
-  useGSAP(() => {
+  useFrame(() => {
     if (meshRef.current) {
+      meshRef.current.lookAt(camera.position)
+    }
+  })
+
+  useGSAP((context, contextSafe) => {
+    if (meshRef.current && canPlayStartAnim) {
+      setCanPlayStartAnim(false)
       gsap.set(meshRef.current.position, { x: 0, y: 0, z: 0 })
-      gsap.to(meshRef.current.position, { x: position[0], y: position[1], z: position[2], duration: 1.5 })
+      gsap.to(meshRef.current.position, { x: position[0], y: position[1], z: position[2], duration: 1.5, delay: index * 0.1, ease: 'elastic.out(1, 0.6)' })
     }
 
+    const handleCirclePosition = contextSafe((e) => {
+      // Animer vers la nouvelle position
+      gsap.to(meshRef.current.position, {
+        x: x,
+        y: 0,
+        z: z,
+        duration: 1,
+        delay: index * 0.1,
+        ease: "power2.out"
+      });
+    })
+    const handleCircleYPosition = contextSafe((e) => {
+      gsap.to(meshRef.current.position, {
+        x: x,
+        y: z,
+        z: 0,
+        duration: 1,
+        delay: index * 0.1,
+        ease: "power2.out"
+      });
+    });
+
+    const handleCardsPosition = contextSafe((e) => {
+      gsap.to(meshRef.current.position, {
+        x: position[0],
+        y: position[1],
+        z: position[2],
+        duration: 1,
+        delay: index * 0.1,
+        ease: "power2.out"
+      });
+    });
+
+    console.log(morphingIndex);
+    const morphFunctions = [handleCirclePosition, handleCircleYPosition, handleCardsPosition]
+   
+    window.addEventListener('click', morphFunctions[morphingIndex])
 
     return () => {
-      window.removeEventListener('click', () => {
-      })
+   
+      window.removeEventListener('click', morphFunctions[morphingIndex])
     }
 
-  }, { scope: meshRef, dependencies: [position, index, texturesElements] })
+  }, { scope: meshRef, dependencies: [position, index, texturesElements, morphingIndex] })
 
   function handlePointerEnter(e) {
     console.log(e);
@@ -126,6 +160,7 @@ function AnimatedCube({ position, index, texturesElements }) {
   console.log("all loaded");
 
   return (
+
     <mesh
       ref={meshRef}
       position={position}

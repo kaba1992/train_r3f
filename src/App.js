@@ -9,7 +9,7 @@ function App() {
   return (
     <>
       <Canvas
-        camera={{ position: [0, 0, 5] }}
+        camera={{ position: [0, 0, 10] }}
       >
         <ambientLight />
         <pointLight position={[10, 10, 10]} />
