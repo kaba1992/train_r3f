@@ -8,13 +8,15 @@ function App() {
 
   return (
     <>
-    <Canvas>
-      <ambientLight />
-      <pointLight position={[10, 10, 10]} />
-      <OrbitControls />
-      <Box position={[0, 0, 0]} />
-      <Stats />
-    </Canvas>
+      <Canvas
+        camera={{ position: [0, 0, 5] }}
+      >
+        <ambientLight />
+        <pointLight position={[10, 10, 10]} />
+        <OrbitControls />
+        <Box position={[0, 0, 0]} />
+        <Stats />
+      </Canvas>
     </>
   );
 }
